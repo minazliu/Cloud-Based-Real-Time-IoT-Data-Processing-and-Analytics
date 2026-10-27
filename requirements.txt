@@ -5,3 +5,5 @@ pytest>=7
 # optional cloud path
 pyspark==3.5.3
 kafka-python>=2.0
+# latency experiments
+paho-mqtt>=2.0

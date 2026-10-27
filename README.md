@@ -42,6 +42,20 @@ and the [run log](v2/results/latency/RUN_LOG.md)):
 alarms); the fused detector (green) stays quiet until the fire at t=1100 s
 and alarms 24 s after ignition.*
 
+## v1 → v2: what changed
+
+| | v1 (2023) | v2 |
+|---|---|---|
+| Language | Python 2 | Python 3 |
+| Sensor data | independent `uniform(0, 800)` random values, no ground truth | physics-informed model: noise, drift, EMI spikes, 12-bit ADC, fire and steam events, with ground truth |
+| Signal processing | none (raw values) | causal, MCU-style filters: moving average, EMA, median, gated Kalman |
+| Fire detection | fixed threshold `smoke > 450` | CUSUM change detection + smoke/CO sensor fusion |
+| Data sent | every raw sample as JSON | send-on-delta with heartbeat, compact messages (−98.8% bytes) |
+| Stream processing | Spark DStreams + `KafkaUtils` (removed in Spark 3), regex string parsing, errors silenced | Spark Structured Streaming, schema-based parsing, event-time windows + watermarks |
+| Networking | not measured | real MQTT round trips over Wi-Fi and cellular |
+| Evaluation | printed query output | 300-run Monte Carlo vs ground truth, delay/false-alarm curves, measured latency |
+| Engineering | standalone scripts | unit tests, CI, Docker Compose (Kafka), fixed seeds, run log, raw data |
+
 ## What v2 adds
 
 **1. Physics-informed sensor model** ([`v2/sensor_model.py`](v2/sensor_model.py))
@@ -113,12 +127,18 @@ Reproduce with `python -m v2.latency.edge_bench`, `mqtt_rtt --label wifi`,
 ## Architecture
 
 ```
- sensor node (simulated)                         cloud
- ┌──────────────────────────────────┐           ┌──────────────────────────────┐
- │ ADC → median/Kalman → CUSUM+fusion│──Kafka──▶│ Spark Structured Streaming    │
- │        └→ send-on-delta encoder   │  alarms  │  windowed stats, alert rules  │
- └──────────────────────────────────┘ + deltas └──────────────────────────────┘
+ sensor node (simulated)                              cloud
+ ┌───────────────────────────────────┐  Kafka: alarms  ┌─────────────────────────────┐
+ │ ADC → median/Kalman → CUSUM+fusion │──+ deltas─────▶│ Spark Structured Streaming   │
+ │        └→ send-on-delta encoder    │                 │  windowed stats, alert rules │
+ └───────────────────────────────────┘                 └─────────────────────────────┘
+          │  latency tests: MQTT (QoS 1) over Wi-Fi / cellular
+          └──────────▶ public broker (broker.emqx.io) ──▶ back to device
 ```
+
+Kafka carries the streaming pipeline (run locally via Docker Compose); the
+latency experiments send the same JSON readings over MQTT, the standard IoT
+protocol, through a real public broker.
 
 ## Run it
 
@@ -131,6 +151,14 @@ python -m v2.experiments                 # regenerates v2/results/ (~20 s)
 pip install pyspark==3.5.3
 python -m v2.producer --devices 3 --seconds 1800 --out-dir data/
 python -m v2.stream_job --source files --path data/ --once
+
+# edge vs cloud latency (needs Java 17 for Spark, internet for MQTT)
+pip install pyspark==3.5.3 paho-mqtt
+python -m v2.latency.edge_bench
+python -m v2.latency.mqtt_rtt --label wifi        # then switch network:
+python -m v2.latency.mqtt_rtt --label hotspot
+python -m v2.latency.spark_latency
+python -m v2.latency.combine                      # -> v2/results/latency/
 
 # with Kafka
 docker compose up -d
