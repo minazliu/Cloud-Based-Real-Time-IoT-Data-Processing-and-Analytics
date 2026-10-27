@@ -8,7 +8,13 @@ data ever reaches the cloud?
 
 ## Key results (v2)
 
-Monte Carlo over 300 simulated 30-minute recordings (130 fires, 159
+> Across 300 simulated runs, the edge pipeline cut mean fire-detection delay
+> from **64 s to 20 s** and used **98.8% less bandwidth** than streaming raw
+> readings. Separately, on real networks, an on-device alarm decision took
+> **under 1 ms**, versus a median **~430–680 ms** for a cloud decision over
+> Wi-Fi and cellular.
+
+**Simulated:** Monte Carlo over 300 simulated 30-minute recordings (130 fires, 159
 steam/cooking nuisance events, ~126 h of non-fire data). Full tables in
 [`v2/results/results.md`](v2/results/results.md).
 
@@ -17,9 +23,16 @@ steam/cooking nuisance events, ~126 h of non-fire data). Full tables in
 | Smoke estimate error (RMSE vs truth) | 42.9 ppm | **13.2 ppm** (gated Kalman, −69%) |
 | False alarms | 10.7 / hour | **0 in ~126 h** (smoke + CO fused CUSUM) |
 | Mean detection delay | 64 s | **20 s** (100% of fires detected) |
-| Alarm decision latency, median (measured) | 429–677 ms (cloud: real network + Spark, Wi-Fi–cellular) | **< 1 ms** on-device (1.3 µs on a laptop CPU) |
 | Uplink messages | 3600 / hour | **151 / hour** (Kalman + send-on-delta, 20 ppm) |
 | Uplink bytes | 925 KB / hour | **11 KB / hour** (−98.8%), with 3× *lower* error |
+
+**Measured** on a MacBook over home Wi-Fi and a phone hotspot, through a public
+MQTT broker (details in section 6 and the [run log](v2/results/latency/RUN_LOG.md)):
+
+| alarm decision latency (median) | cloud: network round trip + Spark | edge: on-device |
+|---|---|---|
+| Wi-Fi | 429 ms | **< 1 ms** (1.3 µs on a laptop CPU) |
+| Cellular (hotspot) | 677 ms | **< 1 ms** |
 
 ![example](v2/results/example_trace.png)
 
@@ -85,8 +98,10 @@ full round trip (sensor → cloud decides → alarm back to the device):
 ![latency](v2/results/latency/latency.png)
 
 Edge timing is Python on a laptop CPU; a microcontroller port would be slower
-but still well under 1 ms. Network and Spark were measured separately and
-combined by random pairing (assumes independence). Note the decision latency
+but still well under 1 ms. Spark ran locally on the laptop as a stand-in for
+a cloud server, so "cloud decision" = real network round trip + local Spark
+processing, measured separately and combined by random pairing (assumes
+independence). Exact commands, environment and raw data: [run log](v2/results/latency/RUN_LOG.md). Note the decision latency
 (< 1 s) is small next to the detection delay (20–64 s): the algorithmic
 improvement matters most, and the edge removes the remaining network and
 cloud dependency. Full table: [`v2/results/latency/latency.md`](v2/results/latency/latency.md).
@@ -131,9 +146,11 @@ spark-submit --packages org.apache.spark:spark-sql-kafka-0-10_2.12:3.5.3 \
   MQ-2 / CO sensor recordings or a public fire-detection dataset.
 - Fusion relies on fires producing CO; smouldering vs flaming fires and
   CO-producing nuisances (e.g. gas stoves) are not yet modelled.
-- Latency is in samples at 1 Hz; network latency and on-device energy cost
-  are not measured. Next: port the Kalman + CUSUM pipeline to an MCU and
-  profile cycles / energy per sample.
+- Detection delay is in samples at 1 Hz (simulated). Decision latency was
+  measured on real networks, but in a single session, with Spark run locally
+  and edge code timed on a laptop rather than an MCU. Next: deploy Spark on a
+  cloud VM, repeat at different times of day, port the Kalman + CUSUM
+  pipeline to a microcontroller and profile cycles / energy per sample.
 
 ## v1 (2023)
 
