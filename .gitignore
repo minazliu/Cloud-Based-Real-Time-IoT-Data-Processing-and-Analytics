@@ -1,0 +1,7 @@
+__pycache__/
+*.pyc
+.pytest_cache/
+data/
+v2/results/quick/
+spark-warehouse/
+.DS_Store
