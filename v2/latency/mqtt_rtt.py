@@ -23,11 +23,11 @@ from .. import sensor_model as sm
 from . import save
 
 
-def make_client():
+def make_client(transport="tcp"):
     try:                                     # paho-mqtt >= 2.0
-        return mqtt.Client(mqtt.CallbackAPIVersion.VERSION2)
+        return mqtt.Client(mqtt.CallbackAPIVersion.VERSION2, transport=transport)
     except AttributeError:                   # paho-mqtt 1.x
-        return mqtt.Client()
+        return mqtt.Client(transport=transport)
 
 
 def main():
@@ -39,6 +39,10 @@ def main():
     ap.add_argument("--n", type=int, default=500)
     ap.add_argument("--rate", type=float, default=5.0, help="messages/s")
     ap.add_argument("--timeout", type=float, default=10.0)
+    ap.add_argument("--transport", choices=["tcp", "websockets"], default="tcp",
+                    help="websockets helps on networks that block port 1883")
+    ap.add_argument("--ws-path", default="/mqtt")
+    ap.add_argument("--tls", action="store_true", help="encrypted connection")
     a = ap.parse_args()
 
     topic = f"iot-latency-test/{uuid.uuid4().hex[:12]}"   # private-ish topic
@@ -60,10 +64,19 @@ def main():
             if seq in sent and seq not in rtt:
                 rtt[seq] = (t - sent[seq]) * 1000.0
 
-    c = make_client()
+    c = make_client(a.transport)
+    if a.transport == "websockets":
+        c.ws_set_options(path=a.ws_path)
+    if a.tls:
+        c.tls_set()                          # system CA certificates
     c.on_connect, c.on_subscribe, c.on_message = on_connect, on_subscribe, on_message
-    print(f"connecting to {a.broker}:{a.port} ...")
-    c.connect(a.broker, a.port, keepalive=30)
+    print(f"connecting to {a.broker}:{a.port} ({a.transport}"
+          f"{', TLS' if a.tls else ''}) ...")
+    try:
+        c.connect(a.broker, a.port, keepalive=30)
+    except OSError as e:
+        raise SystemExit(f"cannot reach {a.broker}:{a.port} ({e}). This network may "
+                         "block the port; try another broker/port (see README).")
     c.loop_start()
     if not subscribed.wait(15):
         raise SystemExit("could not subscribe: broker unreachable?")
@@ -92,6 +105,7 @@ def main():
     save(f"mqtt_{a.label}", [rtt[k] for k in sorted(rtt)],
          {"what": "MQTT publish -> broker -> subscribe round trip",
           "label": a.label, "broker": f"{a.broker}:{a.port}", "qos": a.qos,
+          "transport": a.transport, "tls": a.tls,
           "rate_hz": a.rate, "sent": a.n, "lost": lost,
           "payload_bytes": len(payload)})
 
