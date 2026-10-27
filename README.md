@@ -56,33 +56,6 @@ and alarms 24 s after ignition.*
 | Evaluation | printed query output | 300-run Monte Carlo vs ground truth, delay/false-alarm curves, measured latency |
 | Engineering | standalone scripts | unit tests, CI, Docker Compose (Kafka), fixed seeds, run log, raw data |
 
-## My role
-
-I led v2 end to end, from extending my 2023 cloud-streaming project into an
-edge signal-processing study to the final results:
-
-- **Direction and scope:** reframed the project around EE questions (signal
-  quality, detection, bandwidth, latency), and kept it hardware-free and
-  zero-cost so every result is reproducible on a laptop.
-- **Methodology decisions:** report detection delay (s) *and* decision
-  latency (ms); measure bandwidth against v1's raw JSON stream; use **real
-  networks** instead of an assumed delay; compare home Wi-Fi with a cellular
-  hotspot; MQTT QoS 1; count the full round trip (sensor → cloud → alarm);
-  report medians; describe the cloud figure as an **estimate** because Spark
-  ran locally.
-- **Measurements:** set up Java/Spark on my Mac and ran all real-network
-  latency experiments (2 × 500 MQTT messages, Spark timing, edge benchmark).
-  When the planned broker (`test.mosquitto.org`) timed out, I ran
-  connectivity checks, confirmed it was down, and switched both runs to
-  `broker.emqx.io` so they stayed comparable. See the [run log](v2/results/latency/RUN_LOG.md).
-- **Review:** checked the results for plausibility and wrote the summary of
-  findings.
-
-**AI assistance:** the v2 code was written with an AI coding assistant
-(Claude) under my direction. I set the goals and scope, made the methodology
-decisions above, ran all real-network measurements on my own machine, and
-reviewed and verified the results.
-
 ## What v2 adds
 
 **1. Physics-informed sensor model** ([`v2/sensor_model.py`](v2/sensor_model.py))
