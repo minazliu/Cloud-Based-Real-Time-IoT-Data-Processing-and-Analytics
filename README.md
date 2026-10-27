@@ -17,6 +17,7 @@ steam/cooking nuisance events, ~126 h of non-fire data). Full tables in
 | Smoke estimate error (RMSE vs truth) | 42.9 ppm | **13.2 ppm** (gated Kalman, −69%) |
 | False alarms | 10.7 / hour | **0 in ~126 h** (smoke + CO fused CUSUM) |
 | Mean detection delay | 64 s | **20 s** (100% of fires detected) |
+| Alarm decision latency, median (measured) | 429–677 ms (cloud: real network + Spark, Wi-Fi–cellular) | **< 1 ms** on-device (1.3 µs on a laptop CPU) |
 | Uplink messages | 3600 / hour | **151 / hour** (Kalman + send-on-delta, 20 ppm) |
 | Uplink bytes | 925 KB / hour | **11 KB / hour** (−98.8%), with 3× *lower* error |
 
@@ -65,6 +66,32 @@ it work: on raw data, noise crosses the deadband constantly.
 [`v2/stream_job.py`](v2/stream_job.py): Spark Structured Streaming with
 schema-based `from_json`, event-time 1-min windows with watermarks, and a
 fused smoke + CO alert rule, replacing the removed DStream/`KafkaUtils` API.
+
+**6. Edge vs cloud decision latency: measured on real networks** ([`v2/latency/`](v2/latency/))
+Once the signal shows a fire, how long until an alarm sounds? Measured on a
+MacBook (Apple silicon) at home, through the public MQTT broker
+`broker.emqx.io` (QoS 1, 500 messages per network, 0 lost), counting the
+full round trip (sensor → cloud decides → alarm back to the device):
+
+| path | median | p95 |
+|---|---|---|
+| Edge: Kalman + fused CUSUM, per sample | 1.3 µs | 3.0 µs |
+| Network round trip, home Wi-Fi | 36 ms | 233 ms |
+| Network round trip, phone hotspot (cellular) | 296 ms | 644 ms |
+| Spark Structured Streaming processing | 388 ms | 420 ms |
+| **Cloud decision, Wi-Fi** | **429 ms** | 621 ms |
+| **Cloud decision, cellular** | **677 ms** | 1033 ms |
+
+![latency](v2/results/latency/latency.png)
+
+Edge timing is Python on a laptop CPU; a microcontroller port would be slower
+but still well under 1 ms. Network and Spark were measured separately and
+combined by random pairing (assumes independence). Note the decision latency
+(< 1 s) is small next to the detection delay (20–64 s): the algorithmic
+improvement matters most, and the edge removes the remaining network and
+cloud dependency. Full table: [`v2/results/latency/latency.md`](v2/results/latency/latency.md).
+Reproduce with `python -m v2.latency.edge_bench`, `mqtt_rtt --label wifi`,
+`mqtt_rtt --label hotspot`, `spark_latency`, then `combine`.
 
 ## Architecture
 
