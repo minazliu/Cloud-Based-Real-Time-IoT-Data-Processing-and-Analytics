@@ -8,7 +8,8 @@ Each message carries a sequence number; RTT = receive time - send time.
     python -m v2.latency.mqtt_rtt --label wifi
     python -m v2.latency.mqtt_rtt --label hotspot      # after switching networks
 
-Defaults: test.mosquitto.org:1883, QoS 1, 500 messages at 5 Hz.
+Defaults: broker.emqx.io:1883, QoS 1, 500 messages at 5 Hz.
+(test.mosquitto.org was unreachable when the reported results were taken.)
 Lost messages (no echo within --timeout s) are counted and reported.
 """
 import argparse
@@ -33,7 +34,7 @@ def make_client(transport="tcp"):
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--label", required=True, help="e.g. wifi, hotspot")
-    ap.add_argument("--broker", default="test.mosquitto.org")
+    ap.add_argument("--broker", default="broker.emqx.io")
     ap.add_argument("--port", type=int, default=1883)
     ap.add_argument("--qos", type=int, default=1, choices=[0, 1, 2])
     ap.add_argument("--n", type=int, default=500)
