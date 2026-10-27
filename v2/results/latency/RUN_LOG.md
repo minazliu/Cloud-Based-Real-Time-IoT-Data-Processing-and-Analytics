@@ -69,7 +69,7 @@ Every individual timing plus metadata is saved in this folder:
 
 ## Notes and limitations
 
-- **Spark ran locally on the laptop**, not on a cloud server. "Cloud
+- **Spark ran locally on the laptop**, not on a cloud server, so the cloud figure is an **estimate**: "Cloud
   decision" = real measured network round trip + locally measured Spark
   processing, combined by random pairing (assumes the two are independent).
 - Edge timing is Python on a laptop CPU, not a microcontroller.

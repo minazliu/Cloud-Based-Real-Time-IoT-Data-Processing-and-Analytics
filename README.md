@@ -10,9 +10,9 @@ data ever reaches the cloud?
 
 > Across 300 simulated runs, the edge pipeline cut mean fire-detection delay
 > from **64 s to 20 s** and used **98.8% less bandwidth** than streaming raw
-> readings. Separately, on real networks, an on-device alarm decision took
-> **under 1 ms**, versus a median **~430–680 ms** for a cloud decision over
-> Wi-Fi and cellular.
+> readings. Separately, an on-device alarm decision measured **under 1 ms**,
+> versus median **estimated cloud decision times of ~430–680 ms** over real
+> Wi-Fi and cellular connections.
 
 **Simulated:** Monte Carlo over 300 simulated 30-minute recordings (130 fires, 159
 steam/cooking nuisance events, ~126 h of non-fire data). Full tables in
@@ -26,10 +26,12 @@ steam/cooking nuisance events, ~126 h of non-fire data). Full tables in
 | Uplink messages | 3600 / hour | **151 / hour** (Kalman + send-on-delta, 20 ppm) |
 | Uplink bytes | 925 KB / hour | **11 KB / hour** (−98.8%), with 3× *lower* error |
 
-**Measured** on a MacBook over home Wi-Fi and a phone hotspot, through a public
-MQTT broker (details in section 6 and the [run log](v2/results/latency/RUN_LOG.md)):
+**Measured / estimated** on a MacBook over home Wi-Fi and a phone hotspot,
+through a public MQTT broker. The cloud figure is an *estimate*: real measured
+network round trip + Spark processing measured locally (details in section 6
+and the [run log](v2/results/latency/RUN_LOG.md)):
 
-| alarm decision latency (median) | cloud: network round trip + Spark | edge: on-device |
+| alarm decision latency (median) | cloud (estimated): network round trip + Spark | edge: on-device (measured) |
 |---|---|---|
 | Wi-Fi | 429 ms | **< 1 ms** (1.3 µs on a laptop CPU) |
 | Cellular (hotspot) | 677 ms | **< 1 ms** |
@@ -80,7 +82,7 @@ it work: on raw data, noise crosses the deadband constantly.
 schema-based `from_json`, event-time 1-min windows with watermarks, and a
 fused smoke + CO alert rule, replacing the removed DStream/`KafkaUtils` API.
 
-**6. Edge vs cloud decision latency: measured on real networks** ([`v2/latency/`](v2/latency/))
+**6. Edge vs cloud decision latency: real networks, estimated cloud time** ([`v2/latency/`](v2/latency/))
 Once the signal shows a fire, how long until an alarm sounds? Measured on a
 MacBook (Apple silicon) at home, through the public MQTT broker
 `broker.emqx.io` (QoS 1, 500 messages per network, 0 lost), counting the
@@ -92,14 +94,14 @@ full round trip (sensor → cloud decides → alarm back to the device):
 | Network round trip, home Wi-Fi | 36 ms | 233 ms |
 | Network round trip, phone hotspot (cellular) | 296 ms | 644 ms |
 | Spark Structured Streaming processing | 388 ms | 420 ms |
-| **Cloud decision, Wi-Fi** | **429 ms** | 621 ms |
-| **Cloud decision, cellular** | **677 ms** | 1033 ms |
+| **Estimated cloud decision, Wi-Fi** | **429 ms** | 621 ms |
+| **Estimated cloud decision, cellular** | **677 ms** | 1033 ms |
 
 ![latency](v2/results/latency/latency.png)
 
 Edge timing is Python on a laptop CPU; a microcontroller port would be slower
 but still well under 1 ms. Spark ran locally on the laptop as a stand-in for
-a cloud server, so "cloud decision" = real network round trip + local Spark
+a cloud server, so "estimated cloud decision" = real network round trip + local Spark
 processing, measured separately and combined by random pairing (assumes
 independence). Exact commands, environment and raw data: [run log](v2/results/latency/RUN_LOG.md). Note the decision latency
 (< 1 s) is small next to the detection delay (20–64 s): the algorithmic

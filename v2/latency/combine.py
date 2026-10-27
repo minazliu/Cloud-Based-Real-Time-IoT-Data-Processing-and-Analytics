@@ -51,7 +51,7 @@ def main():
         tot = rng.choice(r, 20000) + rng.choice(s, 20000)
         totals[label] = summarize(tot)
         name = "network + Spark" if spark else "network only"
-        rows.append((f"**Cloud decision, {label}** ({name}, full round trip)",
+        rows.append((f"**Estimated cloud decision, {label}** ({name}, full round trip)",
                      totals[label], ""))
 
     def fmt(v):
@@ -66,7 +66,7 @@ def main():
         L.append(f"| {name} | {fmt(s['median_ms'])} | {fmt(s['p95_ms'])} | "
                  f"{fmt(s['p99_ms'])} | {s['n']} | {note} |")
     for label, t in totals.items():
-        L.append(f"\n- **{label}:** cloud decision median {fmt(t['median_ms'])} vs "
+        L.append(f"\n- **{label}:** estimated cloud decision median {fmt(t['median_ms'])} vs "
                  f"edge {fmt(e)} (≈{t['median_ms'] / e:,.0f}× faster on the edge); "
                  f"cloud p95 {fmt(t['p95_ms'])}.")
     L.append("\nEdge timing is Python on a laptop CPU, not a microcontroller. "
