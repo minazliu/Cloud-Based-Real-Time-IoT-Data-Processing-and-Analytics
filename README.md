@@ -8,7 +8,13 @@ data ever reaches the cloud?
 
 ## Key results (v2)
 
-Monte Carlo over 300 simulated 30-minute recordings (130 fires, 159
+> Across 300 simulated runs, the edge pipeline cut mean fire-detection delay
+> from **64 s to 20 s** and used **98.8% less bandwidth** than streaming raw
+> readings. Separately, an on-device alarm decision measured **under 1 ms**,
+> versus median **estimated cloud decision times of ~430–680 ms** over real
+> Wi-Fi and cellular connections.
+
+**Simulated:** Monte Carlo over 300 simulated 30-minute recordings (130 fires, 159
 steam/cooking nuisance events, ~126 h of non-fire data). Full tables in
 [`v2/results/results.md`](v2/results/results.md).
 
@@ -19,6 +25,16 @@ steam/cooking nuisance events, ~126 h of non-fire data). Full tables in
 | Mean detection delay | 64 s | **20 s** (100% of fires detected) |
 | Uplink messages | 3600 / hour | **151 / hour** (Kalman + send-on-delta, 20 ppm) |
 | Uplink bytes | 925 KB / hour | **11 KB / hour** (−98.8%), with 3× *lower* error |
+
+**Measured / estimated** on a MacBook over home Wi-Fi and a phone hotspot,
+through a public MQTT broker. The cloud figure is an *estimate*: real measured
+network round trip + Spark processing measured locally (details in section 6
+and the [run log](v2/results/latency/RUN_LOG.md)):
+
+| alarm decision latency (median) | cloud (estimated): network round trip + Spark | edge: on-device (measured) |
+|---|---|---|
+| Wi-Fi | 429 ms | **< 1 ms** (1.3 µs on a laptop CPU) |
+| Cellular (hotspot) | 677 ms | **< 1 ms** |
 
 ![example](v2/results/example_trace.png)
 
@@ -66,6 +82,34 @@ it work: on raw data, noise crosses the deadband constantly.
 schema-based `from_json`, event-time 1-min windows with watermarks, and a
 fused smoke + CO alert rule, replacing the removed DStream/`KafkaUtils` API.
 
+**6. Edge vs cloud decision latency: real networks, estimated cloud time** ([`v2/latency/`](v2/latency/))
+Once the signal shows a fire, how long until an alarm sounds? Measured on a
+MacBook (Apple silicon) at home, through the public MQTT broker
+`broker.emqx.io` (QoS 1, 500 messages per network, 0 lost), counting the
+full round trip (sensor → cloud decides → alarm back to the device):
+
+| path | median | p95 |
+|---|---|---|
+| Edge: Kalman + fused CUSUM, per sample | 1.3 µs | 3.0 µs |
+| Network round trip, home Wi-Fi | 36 ms | 233 ms |
+| Network round trip, phone hotspot (cellular) | 296 ms | 644 ms |
+| Spark Structured Streaming processing | 388 ms | 420 ms |
+| **Estimated cloud decision, Wi-Fi** | **429 ms** | 621 ms |
+| **Estimated cloud decision, cellular** | **677 ms** | 1033 ms |
+
+![latency](v2/results/latency/latency.png)
+
+Edge timing is Python on a laptop CPU; a microcontroller port would be slower
+but still well under 1 ms. Spark ran locally on the laptop as a stand-in for
+a cloud server, so "estimated cloud decision" = real network round trip + local Spark
+processing, measured separately and combined by random pairing (assumes
+independence). Exact commands, environment and raw data: [run log](v2/results/latency/RUN_LOG.md). Note the decision latency
+(< 1 s) is small next to the detection delay (20–64 s): the algorithmic
+improvement matters most, and the edge removes the remaining network and
+cloud dependency. Full table: [`v2/results/latency/latency.md`](v2/results/latency/latency.md).
+Reproduce with `python -m v2.latency.edge_bench`, `mqtt_rtt --label wifi`,
+`mqtt_rtt --label hotspot`, `spark_latency`, then `combine`.
+
 ## Architecture
 
 ```
@@ -104,9 +148,11 @@ spark-submit --packages org.apache.spark:spark-sql-kafka-0-10_2.12:3.5.3 \
   MQ-2 / CO sensor recordings or a public fire-detection dataset.
 - Fusion relies on fires producing CO; smouldering vs flaming fires and
   CO-producing nuisances (e.g. gas stoves) are not yet modelled.
-- Latency is in samples at 1 Hz; network latency and on-device energy cost
-  are not measured. Next: port the Kalman + CUSUM pipeline to an MCU and
-  profile cycles / energy per sample.
+- Detection delay is in samples at 1 Hz (simulated). Decision latency was
+  measured on real networks, but in a single session, with Spark run locally
+  and edge code timed on a laptop rather than an MCU. Next: deploy Spark on a
+  cloud VM, repeat at different times of day, port the Kalman + CUSUM
+  pipeline to a microcontroller and profile cycles / energy per sample.
 
 ## v1 (2023)
 
